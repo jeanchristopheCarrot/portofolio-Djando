@@ -5,34 +5,35 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views import generic
 from requests.models import HTTPError
+from helloapp import db_post
 
 from helloapp.forms import LogInForm, UpdateForm
 from .word import generateWord
-from .db import DBConnect
-from helloapp import db
+#from .db import DBConnect
 from django.views.decorators.csrf import csrf_exempt
-
+from .models import Users
 
 # Create your views here.
 
 def base(request):
-    dbConnection = db.DBConnect()
-    currentUser = dbConnection.isCurrentUser()
-    if(currentUser == ''):
-        loggedin="false"
-    else:
-        loggedin="true"
-    return render(request, 'helloapp/base.html', {'currentUser':currentUser,'loggedin':loggedin})
+    try:
+        if(Users.objects.filter(isCurrentUser=True).exists()):            
+            currentUser = Users.objects.get(isCurrentUser=True) 
+            return render(request, 'helloapp/base.html', {'currentUser':currentUser,'loggedin':"true"})
+        else:
+            return render(request, 'helloapp/base.html', {'currentUser':'No User','loggedin':"false"})        
+    except:
+        return render(request, 'helloapp/base.html', {'currentUser':'NoDatabase','loggedin':'false'})
 
 def game(request):
-    print('game')
     try:
         newword = generateWord(); 
-        print(newword)
-        dbConnection = DBConnect()
-        currentUser = dbConnection.isCurrentUser()
-        dbConnection.recordWord(newword,currentUser)
-        currentScore = dbConnection.isCurrentScore()
+        print(newword)        
+        currentUser = Users(isCurrentUser=True).name 
+        print(currentUser)
+        #dbConnection.recordWord(newword,currentUser)
+        currentScore = Users(isCurrentUser = True).score
+        print(currentScore)
         return render(request, 'helloapp/game.html', {'word':newword,'score':currentScore})
     except:
         return HTTPError()
@@ -42,36 +43,35 @@ def login(request):
     return render(request, 'helloapp/login.html', {})
 
 def score(request):
-    dbConnection = DBConnect()
-    currentUser = dbConnection.isCurrentUser()
-    currentScore = dbConnection.isCurrentScore()
-    return render(request, 'helloapp/score.html', {'currentUser':currentUser, 'score':currentScore})
+    currentUser =  Users.objects.get(isCurrentUser = True) 
+    currentScore = currentUser.score
+    return render(request, 'helloapp/score.html', {'currentUser':currentUser.name, 'score':currentScore})
 
 def loginForm(request):
-    #name = request.form['username']
-    #password = request.form['password']
-    print('logInForm')
+    print('check form')
     form = LogInForm(request.POST)
     print(form)
     name = form.cleaned_data['username']
     print(name)
     password = form.cleaned_data['password']
     print(password)
-    currentUser = name
-    dbConnection = DBConnect()
-    if(dbConnection.isUserExists(name)):
-        dbConnection.login(name,password)
+    print('check exist')
+
+    if(Users.objects.filter(name=name)):
+        print('exist')      
+        Users.objects.filter(name=name).update(isCurrentUser = True)
     else:
-        print('register')
-        dbConnection.register(name,password)
-    return render(request, 'helloapp/base.html', {'currentUser':currentUser,'loggedin':'true'})
+        print('not exist')
+        newUser = Users(name=name, password=password,isCurrentUser = True,score=0)
+        newUser.save()
+  
+    return render(request, 'helloapp/base.html', {'currentUser':name,'loggedin':'true'})
 
 def logout(request):
     print('logout')
-    dbConnection = db.DBConnect()
-    currentUser = dbConnection.isCurrentUser()
-    print(currentUser)
-    dbConnection.logout(currentUser)
+    currentUser =  Users.objects.get(isCurrentUser = True) 
+    currentUser.isCurrentUser = 0
+    currentUser.save()
     return render(request, 'helloapp/base.html', {'currentUser':'','loggedin':'false'})
 
 @csrf_exempt
@@ -88,10 +88,15 @@ def update(request):
             print(letter)
             print(score)
     
-    dbConnection = DBConnect();
-    if(dbConnection.isCurrentUser != None):
-        dbConnection.updateScore(score);
-        dbConnection.updateWordwithLetter(word,letter);
+    currentUser =  Users.objects.get(isCurrentUser = True) 
+    currentUser.score = score
+    currentUser.save()
+
+
+    #dbConnection = db_post.DBConnect();
+    #if(dbConnection.isCurrentUser != None):
+    #    dbConnection.updateScore(score);
+    #    dbConnection.updateWordwithLetter(word,letter);
     #currentUser = session.get('current_user', None)
     #question = get_object_or_404(Question, pk=question_id)
     #try:
